@@ -304,6 +304,7 @@ class Laser_mapping
     std::list<std::shared_ptr<Maps_keyframe<float>>> m_keyframe_of_updating_list;
     std::list<std::shared_ptr<Maps_keyframe<float>>> m_keyframe_need_precession_list;
 
+    Scene_alignment<float>                           m_scene_align;
     ADD_SCREEN_PRINTF_OUT_METHOD;
 
     int if_pt_in_fov( const Eigen::Matrix<double, 3, 1> &pt )
@@ -846,7 +847,7 @@ class Laser_mapping
 
         nav_msgs::Odometry odom;
         m_laser_after_loopclosure_path.header.stamp = ros::Time::now();
-        m_laser_after_loopclosure_path.header.frame_id = "/camera_init";
+        m_laser_after_loopclosure_path.header.frame_id = "camera_init";
         for ( auto it = pose3d_aft_loopclosure.begin();
               it != pose3d_aft_loopclosure.end(); it++ )
         {
@@ -861,7 +862,7 @@ class Laser_mapping
             pose_stamp.pose.position.y = pose_3d.p( 1 );
             pose_stamp.pose.position.z = pose_3d.p( 2 );
 
-            pose_stamp.header.frame_id = "/camera_init";
+            pose_stamp.header.frame_id = "camera_init";
             
             m_laser_after_loopclosure_path.poses.push_back( pose_stamp );
         }
@@ -882,7 +883,6 @@ class Laser_mapping
         std::string                                        json_file_name;
         int                                                curren_frame_idx;
         std::vector<std::shared_ptr<Maps_keyframe<float>>> keyframe_vec;
-        Scene_alignment<float>                             scene_align;
         Mapping_refine<PointType>                          map_rfn;
         std::vector<std::string>                           m_filename_vec;
 
@@ -893,9 +893,9 @@ class Laser_mapping
 
         float avail_ratio_plane = 0.05; // 0.05 for 300 scans, 0.15 for 1000 scans
         float avail_ratio_line = 0.03;
-        scene_align.init( m_loop_save_dir_name );
-        scene_align.m_accepted_threshold = m_loop_closure_map_alignment_inlier_threshold;
-        scene_align.m_maximum_icp_iteration = m_loop_closure_map_alignment_maximum_icp_iteration;
+        m_scene_align.init( m_loop_save_dir_name );
+        m_scene_align.m_accepted_threshold = m_loop_closure_map_alignment_inlier_threshold;
+        m_scene_align.m_maximum_icp_iteration = m_loop_closure_map_alignment_maximum_icp_iteration;
         // scene_align. =  m_
         PCL_TOOLS::PCL_point_cloud_to_pcd pcd_saver;
         pcd_saver.set_save_dir_name( std::string( m_loop_save_dir_name ).append( "/pcd" ) );
@@ -1031,27 +1031,27 @@ class Laser_mapping
                     {
                         continue;
                     }
-                    scene_align.set_downsample_resolution( m_loop_closure_map_alignment_resolution, m_loop_closure_map_alignment_resolution );
-                    scene_align.m_para_scene_alignments_maximum_residual_block = m_para_scene_alignments_maximum_residual_block;
-                    double icp_score = scene_align.find_tranfrom_of_two_mappings( last_keyframe, keyframe_vec[ his ], m_loop_closure_map_alignment_if_dump_matching_result );
+                    m_scene_align.set_downsample_resolution( m_loop_closure_map_alignment_resolution, m_loop_closure_map_alignment_resolution );
+                    m_scene_align.m_para_scene_alignments_maximum_residual_block = m_para_scene_alignments_maximum_residual_block;
+                    double icp_score = m_scene_align.find_tranfrom_of_two_mappings( last_keyframe, keyframe_vec[ his ], m_loop_closure_map_alignment_if_dump_matching_result );
                     
                     screen_printf( "===============================================\r\n" );
                     screen_printf( "%s -- %s\r\n", m_filename_vec[ keyframe_vec.size() - 1 ].c_str(), m_filename_vec[ his ].c_str() );
-                    screen_printf( "ICP inlier threshold = %lf, %lf\r\n", icp_score, scene_align.m_pc_reg.m_inlier_threshold );
-                    screen_printf( "%s\r\n", scene_align.m_pc_reg.m_final_opt_summary.BriefReport().c_str() );
+                    screen_printf( "ICP inlier threshold = %lf, %lf\r\n", icp_score, m_scene_align.m_pc_reg.m_inlier_threshold );
+                    screen_printf( "%s\r\n", m_scene_align.m_pc_reg.m_final_opt_summary.BriefReport().c_str() );
                     
                     m_logger_loop_closure.printf( "===============================================\r\n" );
                     m_logger_loop_closure.printf( "%s -- %s\r\n", m_filename_vec[ keyframe_vec.size() - 1 ].c_str(), m_filename_vec[ his ].c_str() );
-                    m_logger_loop_closure.printf( "ICP inlier threshold = %lf, %lf\r\n", icp_score, scene_align.m_pc_reg.m_inlier_threshold );
-                    m_logger_loop_closure.printf( "%s\r\n", scene_align.m_pc_reg.m_final_opt_summary.BriefReport().c_str() );
+                    m_logger_loop_closure.printf( "ICP inlier threshold = %lf, %lf\r\n", icp_score, m_scene_align.m_pc_reg.m_inlier_threshold );
+                    m_logger_loop_closure.printf( "%s\r\n", m_scene_align.m_pc_reg.m_final_opt_summary.BriefReport().c_str() );
                     
-                    if ( scene_align.m_pc_reg.m_inlier_threshold > m_loop_closure_map_alignment_inlier_threshold*2 )
+                    if ( m_scene_align.m_pc_reg.m_inlier_threshold > m_loop_closure_map_alignment_inlier_threshold*2 )
                     {
                         his += 10;
                         continue;
                     }
 
-                    if ( scene_align.m_pc_reg.m_inlier_threshold < m_loop_closure_map_alignment_inlier_threshold )
+                    if ( m_scene_align.m_pc_reg.m_inlier_threshold < m_loop_closure_map_alignment_inlier_threshold )
                     {
                         printf( "I believe this is true loop.\r\n" );
                        m_logger_loop_closure.printf( "I believe this is true loop.\r\n" );
@@ -1059,8 +1059,8 @@ class Laser_mapping
                         auto Q_b = pose3d_vec[ pose3d_vec.size() - 1 ].q;
                         auto T_a = pose3d_vec[ his ].p;
                         auto T_b = pose3d_vec[ pose3d_vec.size() - 1 ].p;
-                        auto ICP_q = scene_align.m_pc_reg.m_q_w_curr;
-                        auto ICP_t = scene_align.m_pc_reg.m_t_w_curr;
+                        auto ICP_q = m_scene_align.m_pc_reg.m_q_w_curr;
+                        auto ICP_t = m_scene_align.m_pc_reg.m_t_w_curr;
 
                         ICP_t = ( ICP_q.inverse() * ( -ICP_t ) );
                         ICP_q = ICP_q.inverse();
@@ -1084,7 +1084,7 @@ class Laser_mapping
                         Ceres_pose_graph_3d::pose_graph_optimization( temp_pose_3d_map, constrain_vec_temp );
                         Ceres_pose_graph_3d::OutputPoses( std::string( path_name ).append( "/poses_ori.txt" ), pose3d_map_ori );
                         Ceres_pose_graph_3d::OutputPoses( std::string( path_name ).append( "/poses_opm.txt" ), temp_pose_3d_map );
-                        scene_align.dump_file_name( std::string( path_name ).append( "/file_name.txt" ), map_file_name );
+                        m_scene_align.dump_file_name( std::string( path_name ).append( "/file_name.txt" ), map_file_name );
 
                         loop_closure_pub_optimzed_path( temp_pose_3d_map );
 
@@ -1094,7 +1094,7 @@ class Laser_mapping
                             auto refined_pt = map_rfn.refine_pointcloud( map_id_pc, pose3d_map_ori, temp_pose_3d_map, pc_idx, 0 );
                             pcl::toROSMsg( refined_pt, ros_laser_cloud_surround );
                             ros_laser_cloud_surround.header.stamp = ros::Time::now();
-                            ros_laser_cloud_surround.header.frame_id = "/camera_init";
+                            ros_laser_cloud_surround.header.frame_id = "camera_init";
                             m_pub_pc_aft_loop.publish( ros_laser_cloud_surround );
                             std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
                         }
@@ -1104,7 +1104,7 @@ class Laser_mapping
                             map_rfn.refine_mapping( map_id_pc, pose3d_map_ori, temp_pose_3d_map, 1 );
                             pcl::toROSMsg( map_rfn.m_pts_aft_refind, ros_laser_cloud_surround );
                             ros_laser_cloud_surround.header.stamp = ros::Time::now();
-                            ros_laser_cloud_surround.header.frame_id = "/camera_init";
+                            ros_laser_cloud_surround.header.frame_id = "camera_init";
                             m_pub_pc_aft_loop.publish( ros_laser_cloud_surround );
                         }
                         if_end = 1;
@@ -1128,7 +1128,7 @@ class Laser_mapping
 
             screen_out << m_timer.toc_string( "Find loop" ) << std::endl;
 
-            scene_align.dump_file_name( std::string( m_loop_save_dir_name ).append( "/file_name.txt" ), map_file_name );
+            m_scene_align.dump_file_name( std::string( m_loop_save_dir_name ).append( "/file_name.txt" ), map_file_name );
             
             if ( 1 )
             {
@@ -1136,7 +1136,7 @@ class Laser_mapping
                 m_timer.tic( "Pub surround pts" );
                 pcl::toROSMsg( pt_full, ros_laser_cloud_surround );
                 ros_laser_cloud_surround.header.stamp = ros::Time::now();
-                ros_laser_cloud_surround.header.frame_id = "/camera_init";
+                ros_laser_cloud_surround.header.frame_id = "camera_init";
                 m_pub_debug_pts.publish( ros_laser_cloud_surround );
                 screen_out << m_timer.toc_string( "Pub surround pts" ) << std::endl;
             }
@@ -1193,7 +1193,7 @@ class Laser_mapping
                 down_sample_filter_surface.filter( *laser_cloud_surround );
                 pcl::toROSMsg( *laser_cloud_surround, ros_laser_cloud_surround );
                 ros_laser_cloud_surround.header.stamp = ros::Time::now();
-                ros_laser_cloud_surround.header.frame_id = "/camera_init";
+                ros_laser_cloud_surround.header.frame_id = "camera_init";
                 m_pub_laser_cloud_surround.publish( ros_laser_cloud_surround );
             }
             //screen_out << "~~~~~~~~~~~ " << "pub_surround_service, size = " << laser_cloud_surround->points.size()  << " ~~~~~~~~~~~" << endl;
@@ -1227,8 +1227,8 @@ class Laser_mapping
         Eigen::Vector3d    t_w_curr = Eigen::Vector3d::Zero();
 
         nav_msgs::Odometry odomAftMapped;
-        odomAftMapped.header.frame_id = "/camera_init";
-        odomAftMapped.child_frame_id = "/aft_mapped";
+        odomAftMapped.header.frame_id = "camera_init";
+        odomAftMapped.child_frame_id = "aft_mapped";
         odomAftMapped.header.stamp = laserOdometry->header.stamp;
         odomAftMapped.pose.pose.orientation.x = q_w_curr.x();
         odomAftMapped.pose.pose.orientation.y = q_w_curr.y();
@@ -1571,7 +1571,7 @@ class Laser_mapping
         sensor_msgs::PointCloud2 laserCloudFullRes3;
         pcl::toROSMsg( current_laser_cloud_full, laserCloudFullRes3 );
         laserCloudFullRes3.header.stamp = ros::Time().fromSec( time_odom );
-        laserCloudFullRes3.header.frame_id = "/camera_init";
+        laserCloudFullRes3.header.frame_id = "camera_init";
         m_pub_laser_cloud_full_res.publish( laserCloudFullRes3 ); //single_frame_with_pose_tranfromed
 
         if ( PUB_DEBUG_INFO )
@@ -1582,12 +1582,12 @@ class Laser_mapping
             pc_reg.pointcloudAssociateToMap( current_laser_cloud_surf_last, pc_feature_pub_surface, g_if_undistore );
             pcl::toROSMsg( pc_feature_pub_surface, laserCloudMsg );
             laserCloudMsg.header.stamp = ros::Time().fromSec( time_odom );
-            laserCloudMsg.header.frame_id = "/camera_init";
+            laserCloudMsg.header.frame_id = "camera_init";
             m_pub_last_surface_pts.publish( laserCloudMsg );
             pc_reg.pointcloudAssociateToMap( current_laser_cloud_corner_last, pc_feature_pub_corners, g_if_undistore );
             pcl::toROSMsg( pc_feature_pub_corners, laserCloudMsg );
             laserCloudMsg.header.stamp = ros::Time().fromSec( time_odom );
-            laserCloudMsg.header.frame_id = "/camera_init";
+            laserCloudMsg.header.frame_id = "camera_init";
             m_pub_last_corner_pts.publish( laserCloudMsg );
         }
 
@@ -1596,12 +1596,12 @@ class Laser_mapping
             sensor_msgs::PointCloud2 laserCloudMsg;
             pcl::toROSMsg( *laser_cloud_surf_from_map, laserCloudMsg );
             laserCloudMsg.header.stamp = ros::Time().fromSec( time_odom );
-            laserCloudMsg.header.frame_id = "/camera_init";
+            laserCloudMsg.header.frame_id = "camera_init";
             m_pub_match_surface_pts.publish( laserCloudMsg );
 
             pcl::toROSMsg( *laser_cloud_corner_from_map, laserCloudMsg );
             laserCloudMsg.header.stamp = ros::Time().fromSec( time_odom );
-            laserCloudMsg.header.frame_id = "/camera_init";
+            laserCloudMsg.header.frame_id = "camera_init";
             m_pub_match_corner_pts.publish( laserCloudMsg );
         }
 
@@ -1613,8 +1613,8 @@ class Laser_mapping
 
         //printf_line;
         nav_msgs::Odometry odomAftMapped;
-        odomAftMapped.header.frame_id = "/camera_init";
-        odomAftMapped.child_frame_id = "/aft_mapped";
+        odomAftMapped.header.frame_id = "camera_init";
+        odomAftMapped.child_frame_id = "aft_mapped";
         odomAftMapped.header.stamp = ros::Time().fromSec( time_odom );
         
         odomAftMapped.pose.pose.orientation.x = m_q_w_curr.x();
@@ -1632,7 +1632,7 @@ class Laser_mapping
         pose_aft_mapped.header = odomAftMapped.header;
         pose_aft_mapped.pose = odomAftMapped.pose.pose;
         m_laser_after_mapped_path.header.stamp = odomAftMapped.header.stamp;
-        m_laser_after_mapped_path.header.frame_id = "/camera_init";
+        m_laser_after_mapped_path.header.frame_id = "camera_init";
 
         if ( m_current_frame_index % 10 == 0 )
         {
@@ -1650,7 +1650,7 @@ class Laser_mapping
         q.setY( m_q_w_curr.y() );
         q.setZ( m_q_w_curr.z() );
         transform.setRotation( q );
-        br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "/camera_init", "/aft_mapped" ) );
+        br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "camera_init", "aft_mapped" ) );
 
         m_mutex_ros_pub.unlock();
         *( m_logger_timer.get_ostream() ) << m_timer.toc_string( "Add new frame" ) << std::endl;
